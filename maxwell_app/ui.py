@@ -5,12 +5,86 @@ from .config import BUTTON_COLOR, BUTTON_HOVER_COLOR, TEXT_COLOR
 
 
 class Button:
-    def __init__(self, rect, text, font, callback):
+    def __init__(self, rect, text, font, callback, icon=None):
         self.rect = pygame.Rect(rect)
         self.text = text
         self.font = font
         self.callback = callback
+        self.icon = icon
         self.hovered = False
+
+    def _draw_icon(self, surface, kind, rect, color):
+        cx, cy = rect.center
+        size = min(rect.width, rect.height)
+        pad = max(2, size // 8)
+        stroke = max(2, size // 10)
+
+        if kind == "play":
+            pts = [
+                (rect.left + pad, rect.top + pad),
+                (rect.left + pad, rect.bottom - pad),
+                (rect.right - pad, cy),
+            ]
+            pygame.draw.polygon(surface, color, pts)
+            return
+
+        if kind == "pause":
+            bar_w = max(3, size // 5)
+            gap = max(3, size // 6)
+            h = rect.height - 2 * pad
+            r1 = pygame.Rect(cx - gap // 2 - bar_w, rect.top + pad, bar_w, h)
+            r2 = pygame.Rect(cx + gap // 2, rect.top + pad, bar_w, h)
+            pygame.draw.rect(surface, color, r1)
+            pygame.draw.rect(surface, color, r2)
+            return
+
+        if kind == "reset":
+            radius = (size // 2) - pad - 1
+            if radius <= 2:
+                return
+            arc_rect = pygame.Rect(0, 0, 2 * radius, 2 * radius)
+            arc_rect.center = (cx, cy)
+            start = math.radians(45)
+            end = math.radians(315)
+            pygame.draw.arc(surface, color, arc_rect, start, end, stroke)
+
+            ex = cx + radius * math.cos(end)
+            ey = cy + radius * math.sin(end)
+            tx = -math.sin(end)
+            ty = math.cos(end)
+            tlen = max(1e-6, math.hypot(tx, ty))
+            tx /= tlen
+            ty /= tlen
+
+            a = math.radians(-30)
+            rtx = tx * math.cos(a) - ty * math.sin(a)
+            rty = tx * math.sin(a) + ty * math.cos(a)
+            tx, ty = rtx, rty
+
+            nx = -ty
+            ny = tx
+
+            head_len = max(8.0, size * 0.26)
+            head_w = max(6.0, size * 0.18)
+
+            tip = (int(ex), int(ey))
+            base_cx = ex - tx * head_len
+            base_cy = ey - ty * head_len
+            p1 = (int(base_cx + nx * head_w), int(base_cy + ny * head_w))
+            p2 = (int(base_cx - nx * head_w), int(base_cy - ny * head_w))
+            pygame.draw.polygon(surface, color, [tip, p1, p2])
+            return
+
+        if kind == "save":
+            body = rect.inflate(-2 * pad, -2 * pad)
+            pygame.draw.rect(surface, color, body, stroke, border_radius=3)
+            notch = pygame.Rect(0, 0, int(body.width * 0.42), int(body.height * 0.28))
+            notch.topleft = (body.left + 2, body.top + 2)
+            pygame.draw.rect(surface, color, notch, stroke, border_radius=2)
+            slot = pygame.Rect(0, 0, int(body.width * 0.6), max(3, int(body.height * 0.12)))
+            slot.midbottom = (body.centerx, body.bottom - 3)
+            pygame.draw.rect(surface, color, slot)
+            return
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEMOTION:
@@ -22,8 +96,24 @@ class Button:
     def draw(self, surface):
         color = BUTTON_HOVER_COLOR if self.hovered else BUTTON_COLOR
         pygame.draw.rect(surface, color, self.rect, border_radius=6)
+        pad_x = 16
+        icon_gap = 10
+        icon_size = int(self.rect.height * 0.42)
+        icon_size = max(20, min(34, icon_size))
         text_surf = self.font.render(self.text, True, TEXT_COLOR)
-        text_rect = text_surf.get_rect(center=self.rect.center)
+
+        if self.icon:
+            icon_rect = pygame.Rect(0, 0, icon_size, icon_size)
+            icon_rect.midleft = (self.rect.left + pad_x, self.rect.centery)
+            self._draw_icon(surface, self.icon, icon_rect, TEXT_COLOR)
+            text_x = icon_rect.right + icon_gap
+            text_rect = text_surf.get_rect(midleft=(text_x, self.rect.centery))
+        else:
+            text_rect = text_surf.get_rect(center=self.rect.center)
+
+        if text_rect.right > self.rect.right - pad_x:
+            text_rect.right = self.rect.right - pad_x
+
         surface.blit(text_surf, text_rect)
 
 

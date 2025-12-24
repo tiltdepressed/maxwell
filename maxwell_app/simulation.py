@@ -1,11 +1,12 @@
+import math
+
+
 class MaxwellWheelSimulation:
     def __init__(self):
         self.m = 0.045
-        self.R_m = 0.004
-        self.J = 5e-5
-        self.tau_tr = 0.0
-        self.friction_enabled = False
-        self.h0 = 0.5
+        self.R_m = 0.0075
+        self.J = 5.25e-5
+        self.h0 = 0.24
         self.g = 9.81
 
         self.h = 0.0
@@ -14,6 +15,8 @@ class MaxwellWheelSimulation:
         self.theta = 0.0
         self.t = 0.0
         self.running = False
+
+        self.time_to_bottom = None
 
         self.time_history = []
         self.h_history = []
@@ -29,6 +32,7 @@ class MaxwellWheelSimulation:
         self.theta = 0.0
         self.t = 0.0
         self.running = False
+        self.time_to_bottom = None
         if clear_history:
             self.time_history.clear()
             self.h_history.clear()
@@ -41,23 +45,17 @@ class MaxwellWheelSimulation:
         if not self.running:
             return
 
+        t0 = self.t
+        h0 = self.h
+        v0 = self.v
+
         R = max(self.R_m, 1e-6)
         denom = self.J + self.m * R * R
         if denom <= 0:
             return
-
         a0 = (self.m * self.g * R * R) / denom
 
-        if self.friction_enabled and self.tau_tr > 0:
-            a_f = self.tau_tr / denom
-            sign_v = 0.0
-            if self.v > 0:
-                sign_v = 1.0
-            elif self.v < 0:
-                sign_v = -1.0
-            a = a0 - sign_v * a_f
-        else:
-            a = a0
+        a = a0
 
         if a < 0 and self.v > 0:
             self.v = 0.0
@@ -67,17 +65,42 @@ class MaxwellWheelSimulation:
         self.v += a * dt
         self.h += self.v * dt
 
+        if self.time_to_bottom is None and v0 > 0 and h0 < self.h0 and self.h >= self.h0:
+            A = 0.5 * a
+            B = v0
+            C = h0 - self.h0
+            tau = None
+            if abs(A) < 1e-12:
+                if abs(B) > 1e-12:
+                    tau_lin = -C / B
+                    if 0.0 <= tau_lin <= dt:
+                        tau = tau_lin
+            else:
+                D = B * B - 4.0 * A * C
+                if D >= 0.0:
+                    s = math.sqrt(D)
+                    r1 = (-B - s) / (2.0 * A)
+                    r2 = (-B + s) / (2.0 * A)
+                    candidates = [r for r in (r1, r2) if 0.0 <= r <= dt]
+                    if candidates:
+                        tau = min(candidates)
+            if tau is not None:
+                self.time_to_bottom = t0 + tau
+
         if self.h <= 0.0:
             self.h = 0.0
             if self.v < 0:
-                self.v = 0.0
+                self.v = -self.v
 
         if self.h >= self.h0:
             self.h = self.h0
             if self.v > 0:
                 self.v = -self.v
 
+
         self.omega = self.v / R
+
+        
         self.theta += self.omega * dt
         self.t += dt
 

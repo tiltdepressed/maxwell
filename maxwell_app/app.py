@@ -24,7 +24,7 @@ from .config import (
     PIXELS_PER_METER,
     SIM_DT,
 )
-from .ui import Button, Checkbox, ParameterControl
+from .ui import Button, ParameterControl
 from .simulation import MaxwellWheelSimulation
 from .graphs import draw_series_graph
 from .plots import snapshot_history, save_plots
@@ -64,9 +64,17 @@ def run():
     def reset_sim():
         sim.reset_state(clear_history=True)
 
-    buttons.append(Button((btn_x, btn_y, btn_width, btn_height), "▶ Запустить", font_small, start_sim))
-    buttons.append(Button((btn_x, btn_y + (btn_height + btn_gap), btn_width, btn_height), "⏸ Остановить", font_small, pause_sim))
-    buttons.append(Button((btn_x, btn_y + 2 * (btn_height + btn_gap), btn_width, btn_height), "↻ Сбросить", font_small, reset_sim))
+    buttons.append(Button((btn_x, btn_y, btn_width, btn_height), "Запустить", font_small, start_sim, icon="play"))
+    buttons.append(
+        Button(
+            (btn_x, btn_y + (btn_height + btn_gap), btn_width, btn_height),
+            "Остановить",
+            font_small,
+            pause_sim,
+            icon="pause",
+        )
+    )
+    buttons.append(Button((btn_x, btn_y + 2 * (btn_height + btn_gap), btn_width, btn_height), "Сбросить", font_small, reset_sim, icon="reset"))
 
     graph_width = 280
     graph_height = 130
@@ -92,7 +100,7 @@ def run():
 
         threading.Thread(target=worker, daemon=True).start()
 
-    buttons.append(Button((save_btn_x, save_btn_y, save_btn_width, save_btn_height), "💾 Скачать график", font_small, save_graphs_cb))
+    buttons.append(Button((save_btn_x, save_btn_y, save_btn_width, save_btn_height), "Скачать график", font_small, save_graphs_cb, icon="save"))
 
     param_controls = []
     param_x = right_rect.x + 20
@@ -171,34 +179,6 @@ def run():
         )
     )
 
-    def set_tau(v):
-        sim.tau_tr = v
-        on_param_change(v)
-
-    tau_control = ParameterControl(
-        "Трение τтр",
-        "Н·м",
-        param_x,
-        0,
-        param_width,
-        font_small,
-        font_small,
-        0.0,
-        0.01,
-        sim.tau_tr,
-        on_change=set_tau,
-        has_slider=True,
-        log_scale=False,
-    )
-    param_controls.append(tau_control)
-
-    cb_rect = pygame.Rect(param_x, 0, param_width, 40)
-
-    def set_friction_enabled(ch):
-        sim.friction_enabled = ch
-        on_param_change(ch)
-
-    friction_checkbox = Checkbox(cb_rect, "Включить трение", font_small, sim.friction_enabled, set_friction_enabled)
 
     def set_h0(v):
         sim.h0 = v
@@ -246,7 +226,7 @@ def run():
     def layout_right_panel(scroll_offset):
         nonlocal right_scroll_min
         y = param_y + scroll_offset
-        insert_checkbox_after = tau_control
+        # no friction checkbox insertion (ideal model)
         content_bottom = y
         for ctrl in param_controls:
             if ctrl is g_control:
@@ -254,10 +234,7 @@ def run():
             ctrl.set_position(param_x, y)
             y += ctrl.get_height() + param_gap
             content_bottom = max(content_bottom, y)
-            if ctrl is insert_checkbox_after:
-                friction_checkbox.set_position(param_x, y, w=param_width, h=40)
-                y += friction_checkbox.rect.height + 8
-                content_bottom = max(content_bottom, y)
+            
 
         available_h = right_rect.height - (param_y + 20)
         content_h = content_bottom - param_y
@@ -297,7 +274,7 @@ def run():
                 btn.handle_event(event)
             for ctrl in param_controls:
                 ctrl.handle_event(event)
-            friction_checkbox.handle_event(event)
+            
 
         while time_accumulator >= SIM_DT:
             sim.step(SIM_DT)
@@ -393,6 +370,7 @@ def run():
             f"v = {sim.v:.2f} м/с",
             f"ω = {sim.omega:.2f} рад/с",
             f"t = {sim.t:.2f} с",
+            f"T = {(sim.time_to_bottom if sim.time_to_bottom is not None else float('nan')):.3f} с" if sim.time_to_bottom is not None else "T = —",
         ]
         line_step = font_medium.get_height() + 8
         for i, line in enumerate(text_lines):
@@ -402,7 +380,7 @@ def run():
 
         for ctrl in param_controls:
             ctrl.draw(screen)
-        friction_checkbox.draw(screen)
+        
 
         title_left = font_large.render("Управление", True, TEXT_COLOR)
         screen.blit(title_left, (left_rect.x + 20, top_margin))
